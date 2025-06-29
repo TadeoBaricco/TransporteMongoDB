@@ -14,7 +14,7 @@ El código proporcionado se ofrece "tal cual", sin garantía de ningún tipo, ex
 
 
 ## Introducción
-Este tutorial te guiará paso a paso en la creación y despliegue de una aplicación Python con MongoEngine conectada a una base de datos MongoDB utilizando Docker y Docker Compose. El objetivo es levantar un entorno de desarrollo profesional, portable y fácil de mantener, ideal tanto para pruebas como para producción.
+Este tutorial te guiará paso a paso en la creación y despliegue de una aplicación Python con MongoEngine conectada a una base de datos MongoDB. El objetivo es levantar un entorno de desarrollo profesional, portable y fácil de mantener, ideal tanto para pruebas como para producción.
 
 ---
 
@@ -29,7 +29,7 @@ Cada envío se registra con un código único, fecha, origen, destino, estado de
 ---
 
 ## 1. Estructura del Proyecto
-Crea una carpeta para tu proyecto. En este ejemplo, la llamaremos `transporte`.
+Crea una carpeta para tu proyecto. En este ejemplo, la llamaremos `transporte_mongoDB`.
 
 **Puedes copiar todo este bloque y pegarlo directamente en tu terminal o archivo correspondiente. Aqui clonaremos directamente el proyecto que desplegamos en Django, de esa forma solo realizaremos los cambios necesarios para el despliegue en MongoDB**
 ```sh
@@ -138,7 +138,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 ```
 
 ## 3. Modelado de la Aplicación
-Ahora debemos convertir el models.py de Django a MongoEngine, se recomienda crear una copia del models de Django (models.py) y ponerle otro nombre, en nuestro caso se llama models_mongoengine.py.
+Ahora debemos convertir el `models.py` de Django a MongoEngine, se recomienda crear una copia del models de Django (`models.py`) y ponerle otro nombre, en nuestro caso se llama `models_mongoengine.py`.
 
 ### Ejemplo de `models_mongoengine.py`
 Incluye modelos bien documentados y estructurados para una gestión profesional de tus datos.
@@ -311,7 +311,7 @@ class Paquete(Document):
 
 ## 4.Carga de Datos Iniciales
 
-Cargar la base de datos con datos iniciales usando un script (Carga_Inicial.py). Para poder usar este script debemos tener, tanto el inital_data.json que usamos para Django como el archivo models_mongoengine,py en la misma ruta. De esta forma el script puede realizar los import necesarios para poder ejecutarse. 
+Cargar la base de datos con datos iniciales usando un script (`Carga_Inicial.py`). Para poder usar este script debemos tener, tanto el `inital_data.json` que usamos para Django como el archivo `models_mongoengine.py` en la misma ruta. De esta forma el script puede realizar los import necesarios para poder ejecutarse. 
 
 > **Puedes copiar todo este bloque y pegarlo directamente en tu archivo Carga_inicial.py.**
 ```python
@@ -445,7 +445,7 @@ python Carga_inicial.py
 ### Visualizacion de Metodos en Python
 
 MongoDB Compass no muestra funciones ni métodos definidos en los modelos de los ODMs como mongoengine porque Compass solo visualiza los datos almacenados realmente en la base de datos MongoDB. Compass NO muestra lógica de Python, ni modelos, ni métodos, ni validaciones, ni clases, ni funciones del backend. 
-Las funciones como .antiguedad(), .dimensiones(), .capacidad_restante(), solo existen en Python.
+Las funciones como `.antiguedad()`, `.dimensiones()`, `.capacidad_restante()`, solo existen en Python.
 
 #### Ejemplo de `funciones_mongoengine.py`
 

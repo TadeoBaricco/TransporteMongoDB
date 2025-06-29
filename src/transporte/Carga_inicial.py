@@ -117,4 +117,4 @@ for obj in data:
         )
         doc.save()
 
-print("Se realizo la carga de datos correctamente :D")
+print("Se realizo la carga de datos correctamente.")

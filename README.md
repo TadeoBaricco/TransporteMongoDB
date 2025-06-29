@@ -2,9 +2,7 @@
 Práctico de Mapeo Objeto-Documental para la materia, Bases de Datos de la carrera `Ingeniería en Sistemas` de la *`Universidad Tecnológica Nacional`* *`Facultad Regional Villa María`*.
 
 
-(ver que se usa y que no)
-![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)
-![Django 5.1.11](https://img.shields.io/badge/Django%205.1.11-092E20?style=for-the-badge&logo=django&logoColor=white)
+![MongoDB 8.0.11](https://img.shields.io/badge/MongoDB%208.0.11-47A248?style=for-the-badge&logo=mongodb&logoColor=white)
 ![Python 3.13](https://img.shields.io/badge/Python%203.13-3776AB?style=for-the-badge&logo=python&logoColor=white)
 
 **Referencia Rápida**
@@ -140,24 +138,23 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 ```
 
 ## 3. Modelado de la Aplicación
-
-### Ahora debemos convertir el models.py de Django a MongoEngine, se recomienda crear una copia del models de Django (models.py) y ponerle otro nombre, en nuestro caso se llama models_mongoengine.py.
+Ahora debemos convertir el models.py de Django a MongoEngine, se recomienda crear una copia del models de Django (models.py) y ponerle otro nombre, en nuestro caso se llama models_mongoengine.py.
 
 ### Ejemplo de `models_mongoengine.py`
 Incluye modelos bien documentados y estructurados para una gestión profesional de tus datos.
 
-> **Puedes copiar todo este bloque y pegarlo directamente en tu archivo ./src/transporte/models.py.**
+> **Puedes copiar todo este bloque y pegarlo directamente en tu archivo ./src/transporte/models_mongoengine.py.**
 ```python
 from mongoengine import (
     Document, EmbeddedDocument, StringField, IntField, DecimalField,
     DateField, DateTimeField, ReferenceField, CASCADE, PULL, NULLIFY,
-    ListField, EmbeddedDocumentField
+    ListField, EmbeddedDocumentField, SequenceField
 )
 from datetime import date
 from django.utils.translation import gettext_lazy as _
 
-
 class NombreAbstract(Document):
+    id = SequenceField(primary_key=True)
     meta = {
         'abstract': True,
         'ordering': ['nombre']
@@ -169,55 +166,35 @@ class NombreAbstract(Document):
             self.nombre = self.nombre.upper()
 
     def __str__(self):
-        return self.nombre
-
+        return f"{self.nombre} (ID: {self.id})"
 
 class Provincia(NombreAbstract):
-    def clean(self):
-        super().clean()
-        if Provincia.objects(nombre=self.nombre, id__ne=self.id).first():
-            raise ValueError(_('Ya existe una provincia con este nombre.'))
-
+    pass
 
 class Ciudad(NombreAbstract):
     provincia = ReferenceField(Provincia, reverse_delete_rule=CASCADE, required=True)
 
-    def clean(self):
-        super().clean()
-        if Ciudad.objects(nombre=self.nombre, provincia=self.provincia, id__ne=self.id).first():
-            raise ValueError(_('Ya existe una ciudad con este nombre en esta provincia.'))
-
-
 class Direccion(Document):
+    id = SequenceField(primary_key=True)
     calle = StringField(max_length=50, required=True)
     numero = IntField(required=True, min_value=0)
     ciudad = ReferenceField(Ciudad, reverse_delete_rule=CASCADE, required=True)
 
     def __str__(self):
-        return f"{self.calle} {self.numero}, {self.ciudad.nombre}"
+        return f"{self.calle} {self.numero}, {self.ciudad.nombre} (ID: {self.id})"
 
     meta = {
         'ordering': ['ciudad.nombre', 'calle']
     }
 
-
 class TipoDocumento(NombreAbstract):
-    def clean(self):
-        super().clean()
-        if TipoDocumento.objects(nombre=self.nombre, id__ne=self.id).first():
-            raise ValueError(_('Ya existe un tipo de documento con este nombre.'))
-
+    pass
 
 class Sucursal(NombreAbstract):
     direccion = ReferenceField(Direccion, reverse_delete_rule=CASCADE, required=True)
 
-    def clean(self):
-        super().clean()
-        if Sucursal.objects(nombre=self.nombre, id__ne=self.id).first():
-            raise ValueError(_('Ya existe una sucursal con este nombre.'))
-
-
 class Empleado(Document):
+    id = SequenceField(primary_key=True)
     nombre = StringField(max_length=50, required=True)
     apellido = StringField(max_length=50, required=True)
     nro_documento = IntField(unique=True, required=True)
@@ -236,21 +213,17 @@ class Empleado(Document):
         return "0 años"
 
     def __str__(self):
-        return f"{self.nombre} {self.apellido} (Sucursal: {self.sucursal.nombre})"
+        return f"{self.nombre} {self.apellido} (ID: {self.id}, Sucursal: {self.sucursal.nombre})"
 
     meta = {
         'ordering': ['apellido', 'nombre']
     }
 
-
 class TipoVehiculo(NombreAbstract):
-    def clean(self):
-        super().clean()
-        if TipoVehiculo.objects(nombre=self.nombre, id__ne=self.id).first():
-            raise ValueError(_('Ya existe un tipo de vehículo con este nombre.'))
-
+    pass
 
 class Cliente(Document):
+    id = SequenceField(primary_key=True)
     nombre = StringField(max_length=50, required=True)
     apellido = StringField(max_length=50, required=True)
     telefono = StringField(max_length=20, null=True)
@@ -259,7 +232,7 @@ class Cliente(Document):
     direccion = ReferenceField(Direccion, reverse_delete_rule=CASCADE, required=True)
 
     def __str__(self):
-        return f"{self.nombre} {self.apellido}"
+        return f"{self.nombre} {self.apellido} (ID: {self.id})"
 
     meta = {
         'ordering': ['apellido', 'nombre'],
@@ -268,28 +241,30 @@ class Cliente(Document):
         ]
     }
 
-
 class Vehiculo(Document):
-    patente = StringField(max_length=10, primary_key=True)
+    id = SequenceField(primary_key=True)
+    patente = StringField(max_length=10, required=True, unique=True)
     capacidad_carga = DecimalField(precision=2, required=True)
     empleado = ReferenceField(Empleado, reverse_delete_rule=CASCADE, required=True)
     tipo_vehiculo = ReferenceField(TipoVehiculo, reverse_delete_rule=NULLIFY, required=True)
 
     def capacidad_restante(self):
+        from models_mongoengine import Envio, Paquete
+        envios_en_camino = Envio.objects(vehiculo=self, estado=Envio.EstadoEnvio.EN_CAMINO)
         carga_total = sum([
-            p.peso for p in Paquete.objects(envio__vehiculo=self, envio__estado=Envio.EstadoEnvio.EN_CAMINO)
+            p.peso for p in Paquete.objects(envio__in=envios_en_camino)
         ])
         return self.capacidad_carga - carga_total
 
     def __str__(self):
-        return f"{self.patente} - {self.tipo_vehiculo.nombre}"
+        return f"{self.patente} (ID: {self.id}) - {self.tipo_vehiculo.nombre}"
 
     meta = {
         'ordering': ['patente']
     }
 
-
 class Envio(Document):
+    id = SequenceField(primary_key=True)
     fecha_envio = DateTimeField(required=True)
     sucursal = ReferenceField(Sucursal, reverse_delete_rule=CASCADE, required=True)
     cliente = ReferenceField(Cliente, reverse_delete_rule=CASCADE, required=True)
@@ -309,8 +284,8 @@ class Envio(Document):
         'ordering': ['-fecha_envio']
     }
 
-
 class Paquete(Document):
+    id = SequenceField(primary_key=True)
     peso = DecimalField(precision=2, required=True)
     ancho = DecimalField(precision=2, required=True)
     alto = DecimalField(precision=2, required=True)
@@ -330,8 +305,6 @@ class Paquete(Document):
     meta = {
         'ordering': ['descripcion']
     }
-
-
 ```
 
 ---
@@ -463,18 +436,48 @@ for obj in data:
 
 print("Se realizo la carga de datos correctamente :D")
 
-
 ```
-> **Puedes copiar todo este bloque y pegarlo directamente en tu terminal. Este comando cargara directamente los datos a la base de datos.**
+> **Puedes copiar todo este bloque y pegarlo directamente en tu terminal. Este comando cargara directamente los datos a la base de datos y tambien realizara la conexion automaticamente a la base de datos.**
 ```sh
 python Carga_inicial.py
 ```
+---
+### Visualizacion de Metodos en Python
 
+MongoDB Compass no muestra funciones ni métodos definidos en los modelos de los ODMs como mongoengine porque Compass solo visualiza los datos almacenados realmente en la base de datos MongoDB. Compass NO muestra lógica de Python, ni modelos, ni métodos, ni validaciones, ni clases, ni funciones del backend. 
+Las funciones como .antiguedad(), .dimensiones(), .capacidad_restante(), solo existen en Python.
 
-##5. Accede a la administración de MongoDB donde ya se van a ver los cambios realizados en la app con datos pre cargados.
+#### Ejemplo de `funciones_mongoengine.py`
+
+> **Puedes copiar todo este bloque y pegarlo directamente en tu archivo funciones_mongoengine.py.**
+```python
+from mongoengine import connect
+from models_mongoengine import Empleado, Paquete, Vehiculo
+
+connect(db='transporte', host='localhost', port=27017)
+
+print("=== Empleados y su antigüedad ===")
+for empleado in Empleado.objects:
+    print(f"{empleado.nombre} {empleado.apellido}: {empleado.antiguedad()}")
+
+print("\n=== Paquetes y sus dimensiones ===")
+for paquete in Paquete.objects:
+    print(f"Paquete #{paquete.id} - {paquete.descripcion}: {paquete.dimensiones()}")
+
+print("\n=== Vehículos y su capacidad restante ===")
+for vehiculo in Vehiculo.objects:
+    try:
+        restante = vehiculo.capacidad_restante()
+    except Exception as e:
+        restante = f"Error: {e}"
+    print(f"{vehiculo.patente}: {restante}")
+```
+---
+
+## 5. Accede a la administración de MongoDB donde ya se van a ver los cambios realizados en la app con datos pre cargados.
 
 '''
-> **Es posible tambien ingresar elementos mediante la terminal de la siguiente forma. (Recordar estar parado en la misma ruta en la que este el archivo que usamos para crear los modelos.)
+> Es posible tambien ingresar elementos mediante la terminal de la siguiente forma. (Recordar estar parado en la misma ruta en la que este el archivo que usamos para crear los modelos.)
 ```python
 
 python

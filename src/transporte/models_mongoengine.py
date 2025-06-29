@@ -1,17 +1,13 @@
-# MODELOS CONVERTIDOS A MONGOENGINE
-
 from mongoengine import (
     Document, EmbeddedDocument, StringField, IntField, DecimalField,
     DateField, DateTimeField, ReferenceField, CASCADE, PULL, NULLIFY,
-    ListField, EmbeddedDocumentField
+    ListField, EmbeddedDocumentField, SequenceField
 )
 from datetime import date
 from django.utils.translation import gettext_lazy as _
 
-# --------------------
-# ABSTRACT BASE CLASS
-# --------------------
 class NombreAbstract(Document):
+    id = SequenceField(primary_key=True)
     meta = {
         'abstract': True,
         'ordering': ['nombre']
@@ -23,67 +19,35 @@ class NombreAbstract(Document):
             self.nombre = self.nombre.upper()
 
     def __str__(self):
-        return self.nombre
+        return f"{self.nombre} (ID: {self.id})"
 
-# --------------------
-# PROVINCIA
-# --------------------
 class Provincia(NombreAbstract):
-    def clean(self):
-        super().clean()
-        if Provincia.objects(nombre=self.nombre, id__ne=self.id).first():
-            raise ValueError(_('Ya existe una provincia con este nombre.'))
+    pass
 
-# --------------------
-# CIUDAD
-# --------------------
 class Ciudad(NombreAbstract):
     provincia = ReferenceField(Provincia, reverse_delete_rule=CASCADE, required=True)
 
-    def clean(self):
-        super().clean()
-        if Ciudad.objects(nombre=self.nombre, provincia=self.provincia, id__ne=self.id).first():
-            raise ValueError(_('Ya existe una ciudad con este nombre en esta provincia.'))
-
-# --------------------
-# DIRECCION
-# --------------------
 class Direccion(Document):
+    id = SequenceField(primary_key=True)
     calle = StringField(max_length=50, required=True)
     numero = IntField(required=True, min_value=0)
     ciudad = ReferenceField(Ciudad, reverse_delete_rule=CASCADE, required=True)
 
     def __str__(self):
-        return f"{self.calle} {self.numero}, {self.ciudad.nombre}"
+        return f"{self.calle} {self.numero}, {self.ciudad.nombre} (ID: {self.id})"
 
     meta = {
         'ordering': ['ciudad.nombre', 'calle']
     }
 
-# --------------------
-# TIPO DE DOCUMENTO
-# --------------------
 class TipoDocumento(NombreAbstract):
-    def clean(self):
-        super().clean()
-        if TipoDocumento.objects(nombre=self.nombre, id__ne=self.id).first():
-            raise ValueError(_('Ya existe un tipo de documento con este nombre.'))
+    pass
 
-# --------------------
-# SUCURSAL
-# --------------------
 class Sucursal(NombreAbstract):
     direccion = ReferenceField(Direccion, reverse_delete_rule=CASCADE, required=True)
 
-    def clean(self):
-        super().clean()
-        if Sucursal.objects(nombre=self.nombre, id__ne=self.id).first():
-            raise ValueError(_('Ya existe una sucursal con este nombre.'))
-
-# --------------------
-# EMPLEADO
-# --------------------
 class Empleado(Document):
+    id = SequenceField(primary_key=True)
     nombre = StringField(max_length=50, required=True)
     apellido = StringField(max_length=50, required=True)
     nro_documento = IntField(unique=True, required=True)
@@ -102,25 +66,17 @@ class Empleado(Document):
         return "0 años"
 
     def __str__(self):
-        return f"{self.nombre} {self.apellido} (Sucursal: {self.sucursal.nombre})"
+        return f"{self.nombre} {self.apellido} (ID: {self.id}, Sucursal: {self.sucursal.nombre})"
 
     meta = {
         'ordering': ['apellido', 'nombre']
     }
 
-# --------------------
-# TIPO VEHICULO
-# --------------------
 class TipoVehiculo(NombreAbstract):
-    def clean(self):
-        super().clean()
-        if TipoVehiculo.objects(nombre=self.nombre, id__ne=self.id).first():
-            raise ValueError(_('Ya existe un tipo de vehículo con este nombre.'))
+    pass
 
-# --------------------
-# CLIENTE
-# --------------------
 class Cliente(Document):
+    id = SequenceField(primary_key=True)
     nombre = StringField(max_length=50, required=True)
     apellido = StringField(max_length=50, required=True)
     telefono = StringField(max_length=20, null=True)
@@ -129,7 +85,7 @@ class Cliente(Document):
     direccion = ReferenceField(Direccion, reverse_delete_rule=CASCADE, required=True)
 
     def __str__(self):
-        return f"{self.nombre} {self.apellido}"
+        return f"{self.nombre} {self.apellido} (ID: {self.id})"
 
     meta = {
         'ordering': ['apellido', 'nombre'],
@@ -138,32 +94,30 @@ class Cliente(Document):
         ]
     }
 
-# --------------------
-# VEHICULO
-# --------------------
 class Vehiculo(Document):
-    patente = StringField(max_length=10, primary_key=True)
+    id = SequenceField(primary_key=True)
+    patente = StringField(max_length=10, required=True, unique=True)
     capacidad_carga = DecimalField(precision=2, required=True)
     empleado = ReferenceField(Empleado, reverse_delete_rule=CASCADE, required=True)
     tipo_vehiculo = ReferenceField(TipoVehiculo, reverse_delete_rule=NULLIFY, required=True)
 
     def capacidad_restante(self):
+        from models_mongoengine import Envio, Paquete
+        envios_en_camino = Envio.objects(vehiculo=self, estado=Envio.EstadoEnvio.EN_CAMINO)
         carga_total = sum([
-            p.peso for p in Paquete.objects(envio__vehiculo=self, envio__estado=Envio.EstadoEnvio.EN_CAMINO)
+            p.peso for p in Paquete.objects(envio__in=envios_en_camino)
         ])
         return self.capacidad_carga - carga_total
 
     def __str__(self):
-        return f"{self.patente} - {self.tipo_vehiculo.nombre}"
+        return f"{self.patente} (ID: {self.id}) - {self.tipo_vehiculo.nombre}"
 
     meta = {
         'ordering': ['patente']
     }
 
-# --------------------
-# ENVIO
-# --------------------
 class Envio(Document):
+    id = SequenceField(primary_key=True)
     fecha_envio = DateTimeField(required=True)
     sucursal = ReferenceField(Sucursal, reverse_delete_rule=CASCADE, required=True)
     cliente = ReferenceField(Cliente, reverse_delete_rule=CASCADE, required=True)
@@ -183,10 +137,8 @@ class Envio(Document):
         'ordering': ['-fecha_envio']
     }
 
-# --------------------
-# PAQUETE
-# --------------------
 class Paquete(Document):
+    id = SequenceField(primary_key=True)
     peso = DecimalField(precision=2, required=True)
     ancho = DecimalField(precision=2, required=True)
     alto = DecimalField(precision=2, required=True)

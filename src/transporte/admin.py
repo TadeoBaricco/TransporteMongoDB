@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import (
+from .models_mongoengine import (
     Provincia, Ciudad, Direccion, TipoDocumento, Sucursal,
     Empleado, TipoVehiculo, Cliente, Vehiculo, Envio, Paquete
 )

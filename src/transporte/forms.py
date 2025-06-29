@@ -1,5 +1,5 @@
 from django import forms
-from .models import Provincia, Ciudad, Sucursal, TipoDocumento, TipoVehiculo
+from .models_mongoengine import Provincia, Ciudad, Sucursal, TipoDocumento, TipoVehiculo
 
 class ProvinciaForm(forms.ModelForm):
     class Meta:

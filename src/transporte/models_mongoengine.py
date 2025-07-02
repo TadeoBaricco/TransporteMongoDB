@@ -1,18 +1,16 @@
 from mongoengine import (
-    Document, EmbeddedDocument, StringField, IntField, DecimalField,
-    DateField, DateTimeField, ReferenceField, CASCADE, PULL, NULLIFY,
-    ListField, EmbeddedDocumentField, SequenceField
+    Document, StringField, IntField, DecimalField,
+    DateField, DateTimeField, ReferenceField, CASCADE, NULLIFY,
+    SequenceField
 )
 from datetime import date
-from django.utils.translation import gettext_lazy as _
 
 class NombreAbstract(Document):
-    id = SequenceField(primary_key=True)
     meta = {
         'abstract': True,
         'ordering': ['nombre']
     }
-    nombre = StringField(max_length=50, required=True, help_text=_('Nombre descriptivo'))
+    nombre = StringField(max_length=50, required=True)
 
     def clean(self):
         if self.nombre:
@@ -22,10 +20,25 @@ class NombreAbstract(Document):
         return f"{self.nombre} (ID: {self.id})"
 
 class Provincia(NombreAbstract):
-    pass
+    id = SequenceField(primary_key=True)
+
+    meta = {
+        'ordering': ['nombre'],
+        'indexes': [
+            {'fields': ['nombre'], 'unique': True}
+        ]
+    }
 
 class Ciudad(NombreAbstract):
+    id = SequenceField(primary_key=True)
     provincia = ReferenceField(Provincia, reverse_delete_rule=CASCADE, required=True)
+
+    meta = {
+        'ordering': ['nombre'],
+        'indexes': [
+            {'fields': ['nombre', 'provincia'], 'unique': True}
+        ]
+    }
 
 class Direccion(Document):
     id = SequenceField(primary_key=True)
@@ -41,10 +54,25 @@ class Direccion(Document):
     }
 
 class TipoDocumento(NombreAbstract):
-    pass
+    id = SequenceField(primary_key=True)
+
+    meta = {
+        'ordering': ['nombre'],
+        'indexes': [
+            {'fields': ['nombre'], 'unique': True}
+        ]
+    }
 
 class Sucursal(NombreAbstract):
+    id = SequenceField(primary_key=True)
     direccion = ReferenceField(Direccion, reverse_delete_rule=CASCADE, required=True)
+
+    meta = {
+        'ordering': ['nombre'],
+        'indexes': [
+            {'fields': ['nombre', 'direccion'], 'unique': True}
+        ]
+    }
 
 class Empleado(Document):
     id = SequenceField(primary_key=True)
@@ -73,7 +101,14 @@ class Empleado(Document):
     }
 
 class TipoVehiculo(NombreAbstract):
-    pass
+    id = SequenceField(primary_key=True)
+
+    meta = {
+        'ordering': ['nombre'],
+        'indexes': [
+            {'fields': ['nombre'], 'unique': True}
+        ]
+    }
 
 class Cliente(Document):
     id = SequenceField(primary_key=True)
@@ -104,9 +139,7 @@ class Vehiculo(Document):
     def capacidad_restante(self):
         from models_mongoengine import Envio, Paquete
         envios_en_camino = Envio.objects(vehiculo=self, estado=Envio.EstadoEnvio.EN_CAMINO)
-        carga_total = sum([
-            p.peso for p in Paquete.objects(envio__in=envios_en_camino)
-        ])
+        carga_total = sum([p.peso for p in Paquete.objects(envio__in=envios_en_camino)])
         return self.capacidad_carga - carga_total
 
     def __str__(self):
@@ -158,3 +191,9 @@ class Paquete(Document):
     meta = {
         'ordering': ['descripcion']
     }
+
+
+##En la clase NombreAbstract le saque la linea id = SequenceField(primary_key=True) para evitar que todas las subclases compartan el mismo contador.
+
+##En cada subclase concreta que hereda de NombreAbstract (Provincia, Ciudad, TipoDocumento, Sucursal, TipoVehiculo), le agregue la linea id = SequenceField(primary_key=True) 
+## para que tengan su propio contador de IDs independiente asi pueden arrancar desde 1.

@@ -50,9 +50,11 @@ class Direccion(Document):
         return f"{self.calle} {self.numero}, {self.ciudad.nombre} (ID: {self.id})"
 
     meta = {
-        'ordering': ['ciudad.nombre', 'calle']
+        'ordering': ['ciudad.nombre', 'calle'],
+        'indexes': [
+            {'fields': ['calle', 'numero', 'ciudad'], 'unique': True}
+        ]
     }
-
 class TipoDocumento(NombreAbstract):
     id = SequenceField(primary_key=True)
 

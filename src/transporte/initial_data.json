@@ -34,6 +34,7 @@
       "nombre": "NEUQUEN"
     }
   },
+  
   {
     "model": "transporte.Ciudad",
     "pk": 1,
@@ -106,7 +107,7 @@
     "pk": 3,
     "fields": {
       "calle": "AVENIDA BRASIL",
-      "numero": 2435,
+      "numero": 2436,
       "ciudad": 2
     }
   },
@@ -129,7 +130,6 @@
     }
   },
 
-
   {
     "model": "transporte.TipoDocumento",
     "pk": 1,
@@ -151,9 +151,7 @@
       "nombre": "CUIT"
     }
   },
-  
-
-{
+  {
     "model": "transporte.Sucursal",
     "pk": 1,
     "fields": {
@@ -185,7 +183,6 @@
       "direccion": 4
     }
   },
-  
   {
     "model": "transporte.TipoVehiculo",
     "pk": 1,

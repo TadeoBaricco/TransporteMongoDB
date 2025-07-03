@@ -146,20 +146,18 @@ Incluye modelos bien documentados y estructurados para una gestión profesional 
 > **Puedes copiar todo este bloque y pegarlo directamente en tu archivo ./src/transporte/models_mongoengine.py.**
 ```python
 from mongoengine import (
-    Document, EmbeddedDocument, StringField, IntField, DecimalField,
-    DateField, DateTimeField, ReferenceField, CASCADE, PULL, NULLIFY,
-    ListField, EmbeddedDocumentField, SequenceField
+    Document, StringField, IntField, DecimalField,
+    DateField, DateTimeField, ReferenceField, CASCADE, NULLIFY,
+    SequenceField
 )
 from datetime import date
-from django.utils.translation import gettext_lazy as _
 
 class NombreAbstract(Document):
-    id = SequenceField(primary_key=True)
     meta = {
         'abstract': True,
         'ordering': ['nombre']
     }
-    nombre = StringField(max_length=50, required=True, help_text=_('Nombre descriptivo'))
+    nombre = StringField(max_length=50, required=True)
 
     def clean(self):
         if self.nombre:
@@ -169,10 +167,25 @@ class NombreAbstract(Document):
         return f"{self.nombre} (ID: {self.id})"
 
 class Provincia(NombreAbstract):
-    pass
+    id = SequenceField(primary_key=True)
+
+    meta = {
+        'ordering': ['nombre'],
+        'indexes': [
+            {'fields': ['nombre'], 'unique': True}
+        ]
+    }
 
 class Ciudad(NombreAbstract):
+    id = SequenceField(primary_key=True)
     provincia = ReferenceField(Provincia, reverse_delete_rule=CASCADE, required=True)
+
+    meta = {
+        'ordering': ['nombre'],
+        'indexes': [
+            {'fields': ['nombre', 'provincia'], 'unique': True}
+        ]
+    }
 
 class Direccion(Document):
     id = SequenceField(primary_key=True)
@@ -184,14 +197,31 @@ class Direccion(Document):
         return f"{self.calle} {self.numero}, {self.ciudad.nombre} (ID: {self.id})"
 
     meta = {
-        'ordering': ['ciudad.nombre', 'calle']
+        'ordering': ['ciudad.nombre', 'calle'],
+        'indexes': [
+            {'fields': ['calle', 'numero', 'ciudad'], 'unique': True}
+        ]
+    }
+class TipoDocumento(NombreAbstract):
+    id = SequenceField(primary_key=True)
+
+    meta = {
+        'ordering': ['nombre'],
+        'indexes': [
+            {'fields': ['nombre'], 'unique': True}
+        ]
     }
 
-class TipoDocumento(NombreAbstract):
-    pass
-
 class Sucursal(NombreAbstract):
+    id = SequenceField(primary_key=True)
     direccion = ReferenceField(Direccion, reverse_delete_rule=CASCADE, required=True)
+
+    meta = {
+        'ordering': ['nombre'],
+        'indexes': [
+            {'fields': ['nombre', 'direccion'], 'unique': True}
+        ]
+    }
 
 class Empleado(Document):
     id = SequenceField(primary_key=True)
@@ -220,7 +250,14 @@ class Empleado(Document):
     }
 
 class TipoVehiculo(NombreAbstract):
-    pass
+    id = SequenceField(primary_key=True)
+
+    meta = {
+        'ordering': ['nombre'],
+        'indexes': [
+            {'fields': ['nombre'], 'unique': True}
+        ]
+    }
 
 class Cliente(Document):
     id = SequenceField(primary_key=True)
@@ -251,9 +288,7 @@ class Vehiculo(Document):
     def capacidad_restante(self):
         from models_mongoengine import Envio, Paquete
         envios_en_camino = Envio.objects(vehiculo=self, estado=Envio.EstadoEnvio.EN_CAMINO)
-        carga_total = sum([
-            p.peso for p in Paquete.objects(envio__in=envios_en_camino)
-        ])
+        carga_total = sum([p.peso for p in Paquete.objects(envio__in=envios_en_camino)])
         return self.capacidad_carga - carga_total
 
     def __str__(self):
@@ -305,6 +340,13 @@ class Paquete(Document):
     meta = {
         'ordering': ['descripcion']
     }
+
+
+##En la clase NombreAbstract le saque la linea id = SequenceField(primary_key=True) para evitar que todas las subclases compartan el mismo contador.
+
+##En cada subclase concreta que hereda de NombreAbstract (Provincia, Ciudad, TipoDocumento, Sucursal, TipoVehiculo), le agregue la linea id = SequenceField(primary_key=True) 
+## para que tengan su propio contador de IDs independiente asi pueden arrancar desde 1.
+
 ```
 
 ---
@@ -317,124 +359,169 @@ Cargar la base de datos con datos iniciales usando un script (`Carga_Inicial.py`
 ```python
 import json
 from mongoengine import connect
+from mongoengine.errors import NotUniqueError, ValidationError, FieldDoesNotExist
 from models_mongoengine import (
     Provincia, Ciudad, Direccion, TipoDocumento,
     Sucursal, Empleado, Cliente, TipoVehiculo,
     Vehiculo, Envio, Paquete
 )
 
-# Conexión a la base de datos MongoDB
+# Conexión a la base de datos
 connect(db="transporte", host="localhost", port=27017)
 
-# Cargar datos desde el archivo JSON
+# Cargar datos desde archivo JSON
 with open('initial_data.json', encoding='utf-8') as f:
     data = json.load(f)
 
-# Diccionarios para mapear IDs relacionales
-prov_map = {}
-ciudad_map = {}
-dir_map = {}
-tipo_doc_map = {}
-sucursal_map = {}
-empleado_map = {}
-cliente_map = {}
-tipo_vehiculo_map = {}
-vehiculo_map = {}
+# Diccionarios de mapeo
+prov_map, ciudad_map, dir_map = {}, {}, {}
+tipo_doc_map, sucursal_map = {}, {}
+empleado_map, cliente_map = {}, {}
+tipo_vehiculo_map, vehiculo_map = {}, {}
 envio_map = {}
 
+def get_or_create(model, fields, pk, id_map):
+    try:
+        doc = model(**fields)
+        doc.save()
+    except NotUniqueError:
+        try:
+            filtro = {"nombre": fields["nombre"].upper()}
+            doc = model.objects(**filtro).first()
+            if doc:
+                print(f"{model.__name__} con nombre '{fields['nombre']}' ya existe. Omitido.")
+            else:
+                print(f"{model.__name__} duplicado, pero no se pudo mapear con nombre '{fields['nombre']}'.")
+                return
+        except Exception as e:
+            print(f"Error al recuperar duplicado de {model.__name__}: {e}")
+            return
+    except (ValidationError, FieldDoesNotExist, KeyError) as e:
+        print(f"Error creando {model.__name__} con datos {fields}: {e}")
+        return
+    except Exception as e:
+        print(f"Error inesperado creando {model.__name__} con datos {fields}: {e}")
+        return
+    id_map[pk] = doc
+
 for obj in data:
-    model = obj["model"].split(".")[-1]
+    model_name = obj["model"].split(".")[-1]
     pk = obj["pk"]
     fields = obj["fields"]
 
-    if model == "Provincia":
-        doc = Provincia(nombre=fields["nombre"])
-        doc.save()
-        prov_map[pk] = doc
+    try:
+        if model_name == "Provincia":
+            get_or_create(Provincia, {"nombre": fields["nombre"]}, pk, prov_map)
 
-    elif model == "Ciudad":
-        doc = Ciudad(nombre=fields["nombre"], provincia=prov_map[fields["provincia"]])
-        doc.save()
-        ciudad_map[pk] = doc
+        elif model_name == "Ciudad":
+            fields["provincia"] = prov_map[fields["provincia"]]
+            get_or_create(Ciudad, fields, pk, ciudad_map)
 
-    elif model == "Direccion":
-        doc = Direccion(calle=fields["calle"], numero=fields["numero"], ciudad=ciudad_map[fields["ciudad"]])
-        doc.save()
-        dir_map[pk] = doc
+        elif model_name == "Direccion":
+            try:
+                ciudad = ciudad_map[fields["ciudad"]]
+                calle = fields["calle"].upper()
+                numero = fields["numero"]
 
-    elif model == "TipoDocumento":
-        doc = TipoDocumento(nombre=fields["nombre"])
-        doc.save()
-        tipo_doc_map[pk] = doc
+                doc = Direccion.objects(calle=calle, numero=numero, ciudad=ciudad).first()
+                if doc:
+                    print(f"Direccion '{calle} {numero}, {ciudad.nombre}' ya existe. Omitido.")
+                else:
+                    doc = Direccion(calle=calle, numero=numero, ciudad=ciudad)
+                    doc.save()
+                dir_map[pk] = doc
+            except Exception as e:
+                print(f"Error creando Direccion: {e}")
 
-    elif model == "Sucursal":
-        doc = Sucursal(nombre=fields["nombre"], direccion=dir_map[fields["direccion"]])
-        doc.save()
-        sucursal_map[pk] = doc
+        elif model_name == "TipoDocumento":
+            get_or_create(TipoDocumento, {"nombre": fields["nombre"]}, pk, tipo_doc_map)
 
-    elif model == "TipoVehiculo":
-        doc = TipoVehiculo(nombre=fields["nombre"])
-        doc.save()
-        tipo_vehiculo_map[pk] = doc
+        elif model_name == "Sucursal":
+            fields["direccion"] = dir_map[fields["direccion"]]
+            get_or_create(Sucursal, fields, pk, sucursal_map)
 
-    elif model == "Empleado":
-        doc = Empleado(
-            nombre=fields["nombre"],
-            apellido=fields["apellido"],
-            nro_documento=fields["nro_documento"],
-            fecha_contratacion=fields["fecha_contratacion"],
-            direccion=dir_map[fields["direccion"]],
-            sucursal=sucursal_map[fields["sucursal"]],
-            tipo_documento=tipo_doc_map[fields["tipo_documento"]]
-        )
-        doc.save()
-        empleado_map[pk] = doc
+        elif model_name == "TipoVehiculo":
+            get_or_create(TipoVehiculo, {"nombre": fields["nombre"]}, pk, tipo_vehiculo_map)
 
-    elif model == "Cliente":
-        doc = Cliente(
-            nombre=fields["nombre"],
-            apellido=fields["apellido"],
-            telefono=fields.get("telefono"),
-            nro_documento=fields["nro_documento"],
-            tipo_documento=tipo_doc_map[fields["tipo_documento"]],
-            direccion=dir_map[fields["direccion"]]
-        )
-        doc.save()
-        cliente_map[pk] = doc
+        elif model_name == "Empleado":
+            try:
+                doc = Empleado(
+                    nombre=fields["nombre"],
+                    apellido=fields["apellido"],
+                    nro_documento=fields["nro_documento"],
+                    fecha_contratacion=fields["fecha_contratacion"],
+                    direccion=dir_map[fields["direccion"]],
+                    sucursal=sucursal_map[fields["sucursal"]],
+                    tipo_documento=tipo_doc_map[fields["tipo_documento"]]
+                )
+                doc.save()
+                empleado_map[pk] = doc
+            except NotUniqueError:
+                print(f"Empleado con DNI {fields['nro_documento']} ya existe. Omitido.")
+            except Exception as e:
+                print(f"Error creando Empleado: {e}")
 
-    elif model == "Vehiculo":
-        doc = Vehiculo(
-            patente=pk,
-            capacidad_carga=float(fields["capacidad_carga"]),
-            empleado=empleado_map[fields["empleado"]],
-            tipo_vehiculo=tipo_vehiculo_map[fields["tipo_vehiculo"]]
-        )
-        doc.save()
-        vehiculo_map[pk] = doc
+        elif model_name == "Cliente":
+            try:
+                doc = Cliente(
+                    nombre=fields["nombre"],
+                    apellido=fields["apellido"],
+                    telefono=fields.get("telefono"),
+                    nro_documento=fields["nro_documento"],
+                    tipo_documento=tipo_doc_map[fields["tipo_documento"]],
+                    direccion=dir_map[fields["direccion"]]
+                )
+                doc.save()
+                cliente_map[pk] = doc
+            except NotUniqueError:
+                print(f"Cliente con DNI {fields['nro_documento']} ya existe. Omitido.")
+            except Exception as e:
+                print(f"Error creando Cliente: {e}")
 
-    elif model == "Envio":
-        doc = Envio(
-            fecha_envio=fields["fecha_envio"],
-            sucursal=sucursal_map[fields["sucursal"]],
-            cliente=cliente_map[fields["cliente"]],
-            estado=fields["estado"],
-            vehiculo=vehiculo_map[fields["vehiculo"]]
-        )
-        doc.save()
-        envio_map[pk] = doc
+        elif model_name == "Vehiculo":
+            try:
+                doc = Vehiculo(
+                    patente=pk,
+                    capacidad_carga=float(fields["capacidad_carga"]),
+                    empleado=empleado_map[fields["empleado"]],
+                    tipo_vehiculo=tipo_vehiculo_map[fields["tipo_vehiculo"]]
+                )
+                doc.save()
+                vehiculo_map[pk] = doc
+            except NotUniqueError:
+                print(f"Vehículo con patente {pk} ya existe. Omitido.")
+            except Exception as e:
+                print(f"Error creando Vehículo: {e}")
 
-    elif model == "Paquete":
-        doc = Paquete(
-            peso=float(fields["peso"]),
-            ancho=float(fields["ancho"]),
-            alto=float(fields["alto"]),
-            longitud=float(fields["longitud"]),
-            descripcion=fields["descripcion"],
-            envio=envio_map[fields["envio"]]
-        )
-        doc.save()
+        elif model_name == "Envio":
+            doc = Envio(
+                fecha_envio=fields["fecha_envio"],
+                sucursal=sucursal_map[fields["sucursal"]],
+                cliente=cliente_map[fields["cliente"]],
+                estado=fields["estado"],
+                vehiculo=vehiculo_map[fields["vehiculo"]]
+            )
+            doc.save()
+            envio_map[pk] = doc
 
-print("Se realizo la carga de datos correctamente :D")
+        elif model_name == "Paquete":
+            doc = Paquete(
+                peso=float(fields["peso"]),
+                ancho=float(fields["ancho"]),
+                alto=float(fields["alto"]),
+                longitud=float(fields["longitud"]),
+                descripcion=fields["descripcion"],
+                envio=envio_map[fields["envio"]]
+            )
+            doc.save()
+
+    except KeyError as e:
+        print(f"Clave faltante al procesar {model_name} (PK {pk}): {e}")
+    except Exception as e:
+        print(f"Error general al procesar {model_name} (PK {pk}): {e}")
+
+print("\nSe completó la carga de datos.")
+
 
 ```
 > **Puedes copiar todo este bloque y pegarlo directamente en tu terminal. Este comando cargara directamente los datos a la base de datos y tambien realizara la conexion automaticamente a la base de datos.**
@@ -475,29 +562,6 @@ for vehiculo in Vehiculo.objects:
 ---
 
 ## 5. Accede a la administración de MongoDB donde ya se van a ver los cambios realizados en la app con datos pre cargados.
-
-'''
-> Es posible tambien ingresar elementos mediante la terminal de la siguiente forma. (Recordar estar parado en la misma ruta en la que este el archivo que usamos para crear los modelos.)
-```python
-
-python
-
-from mongoengine import connect
-from models_mongoengine import Provincia
-
-connect(db="transporte", host="localhost", port=27017)
-
-# Crear una nueva provincia
-prov = Provincia(nombre="SAN JUAN")
-prov.save()
-
-# Verificar
-print(prov)
-
-#El elemento podra visualizarse tambien en Compass al actualizar la Base de datos.
-
-```
-
 
 ---
 

@@ -34,6 +34,15 @@
       "nombre": "NEUQUEN"
     }
   },
+  {
+    "model": "transporte.Provincia",
+    "pk": 6,
+    "fields": {
+      "nombre": "NEUQUEN"
+    }
+  },
+  
+  
   
   {
     "model": "transporte.Ciudad",
@@ -75,6 +84,15 @@
       "provincia": 5
     }
   },
+  {
+    "model": "transporte.Ciudad",
+    "pk": 6,
+    "fields": {
+      "nombre": "CUTRAL CO",
+      "provincia": 4
+    }
+  },
+  
   {
     "model": "transporte.Direccion",
     "pk": 1,
